@@ -24,11 +24,25 @@ import jetbrains.jetpad.base.ThrowableHandlers;
 import java.util.logging.Logger;
 
 public final class JsEventDispatchThread implements EventDispatchThread {
+  private long myScheduled = 0;
+  private long myStarted = 0;
+  private long myFinished = 0;
+
   private static final Logger LOG = Logger.getLogger(JsEventDispatchThread.class.getName());
 
   public static final JsEventDispatchThread INSTANCE = new JsEventDispatchThread();
 
   private JsEventDispatchThread() {
+    Timer timer = new Timer() {
+      @Override
+      public void run() {
+        LOG.info("JS EDT stats: scheduled=" + myScheduled + ", started=" + myStarted + ", finished=" + myFinished);
+        myScheduled = 0;
+        myStarted = 0;
+        myFinished = 0;
+      }
+    };
+    timer.scheduleRepeating(10000);
   }
 
   @Override
@@ -38,6 +52,7 @@ public final class JsEventDispatchThread implements EventDispatchThread {
 
   @Override
   public void schedule(final Runnable r) {
+    myScheduled++;
     Scheduler.get().scheduleFinally(new Scheduler.ScheduledCommand() {
       @Override
       public void execute() {
@@ -48,6 +63,7 @@ public final class JsEventDispatchThread implements EventDispatchThread {
 
   @Override
   public Registration schedule(int delay, final Runnable r) {
+    myScheduled++;
     Timer timer = new Timer() {
       @Override
       public void run() {
@@ -60,6 +76,7 @@ public final class JsEventDispatchThread implements EventDispatchThread {
 
   @Override
   public Registration scheduleRepeating(final int period, final Runnable r) {
+    myScheduled++;
     Timer timer = new Timer() {
       private long myLastInvocation = 0L;
       @Override
@@ -75,6 +92,7 @@ public final class JsEventDispatchThread implements EventDispatchThread {
   }
 
   private void doExecute(Runnable r) {
+    myStarted++;
     try {
       r.run();
     } catch (JavaScriptException jse) {
@@ -84,6 +102,8 @@ public final class JsEventDispatchThread implements EventDispatchThread {
       ThrowableHandlers.handle(jse);
     } catch (Throwable t) {
       ThrowableHandlers.handle(t);
+    } finally {
+      myFinished++;
     }
   }
 
